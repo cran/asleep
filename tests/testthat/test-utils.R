@@ -79,3 +79,50 @@ testthat::test_that("renamer replaces only exact column names", {
     asleep:::renamer(dat, old = c("old", "older"), new = "new")
   )
 })
+
+test_that("sl_format_time returns the clock time", {
+  x = as.POSIXct("2013-06-10 19:30:00", tz = "UTC")
+  expect_equal(sl_format_time(x), "2013-06-10 19:30:00")
+  expect_equal(sl_format_time("2013-06-10 19:30:00"), "2013-06-10 19:30:00")
+})
+
+test_that("sl_format_time keeps clock times in a daylight-saving gap", {
+  # 01:30 does not exist in Europe/London on 2013-03-31 (spring forward)
+  x = as.POSIXct(c("2013-03-31 00:30:00", "2013-03-31 01:30:00"), tz = "UTC")
+  expect_equal(
+    sl_format_time(x),
+    c("2013-03-31 00:30:00", "2013-03-31 01:30:00")
+  )
+})
+
+test_that("sl_format_time ignores the system time zone", {
+  # reticulate returns naive times as UTC instants with no tzone attribute
+  x = as.POSIXct("2013-03-31 01:30:00", tz = "UTC")
+  attr(x, "tzone") = NULL
+  old_tz = Sys.getenv("TZ", unset = NA)
+  on.exit(if (is.na(old_tz)) Sys.unsetenv("TZ") else Sys.setenv(TZ = old_tz))
+  Sys.setenv(TZ = "America/New_York")
+  expect_equal(sl_format_time(x), "2013-03-31 01:30:00")
+})
+
+test_that("sl_input_tz uses the time zone of a data.frame", {
+  df = data.frame(
+    time = as.POSIXct("2013-06-10 19:30:00", tz = "Europe/London"),
+    X = 0, Y = 0, Z = 1
+  )
+  expect_equal(sl_input_tz(df), "Europe/London")
+  expect_null(sl_input_tz("file.bin"))
+  df$time = as.character(df$time)
+  expect_null(sl_input_tz(df))
+})
+
+test_that("sl_write_csv keeps sub-millisecond time stamps", {
+  df = data.frame(
+    time = as.POSIXct("2013-06-10 19:30:00", tz = "UTC") + c(0, 1 / 85.7),
+    X = 0, Y = 0, Z = 1
+  )
+  path = sl_write_csv(df)
+  on.exit(unlink(path))
+  out = utils::read.csv(path)
+  expect_equal(out$time[2], "2013-06-10 19:30:00.011668")
+})

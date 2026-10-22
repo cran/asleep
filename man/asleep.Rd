@@ -41,7 +41,10 @@ the current device time. e.g. +1 or -1}
 
 \item{pytorch_device}{device to use for prediction for PyTorch.}
 
-\item{sample_rate}{Sample rate for the data, currently not used.}
+\item{sample_rate}{Sample rate (in Hz) of the data; need not be an integer
+(e.g. 85.7 Hz for GENEActiv).  If \code{NULL}, then
+\code{attr(file, "sample_rate")} is used if present.  If both are \code{NULL},
+the sample rate is not passed and \code{asleep} infers it from the data.}
 
 \item{verbose}{print diagnostic messages}
 
@@ -59,6 +62,14 @@ screen while the child process is running, passed to \code{\link[callr:r]{callr:
 }
 \value{
 A list of outputs, including summaries, paths, and dataframes.
+Times are returned as character clock times without a time zone, exactly
+as recorded (they are not converted to UTC).  For a \code{data.frame} input with
+a \code{POSIXct} \code{time} column, \code{attr(result, "tzone")} holds that column's time
+zone; otherwise (e.g. device files, which carry no time zone) it is \code{NULL}.
+To get date-times, use e.g.
+\code{lubridate::ymd_hms(x, tz = attr(result, "tzone"))}; set the time zone of
+\code{file$time} before calling \code{asleep} if needed.  Clock times in a
+daylight-saving gap will be \code{NA} unless handled (see \code{lubridate::roll_dst}).
 }
 \description{
 Run \code{asleep} Model on Data
@@ -99,7 +110,7 @@ asleep_check_result = function() {
       st = out$predictions
       if (requireNamespace("ggplot2", quietly = TRUE) &&
           requireNamespace("tidyr", quietly = TRUE) &&
-          requireNamespace("dplyr", quietly = TRUE)) {
+          requireNamespace("lubridate", quietly = TRUE)) {
         d = st[1:250,] |>
           dplyr::mutate(
             time = lubridate::as_datetime(time),
